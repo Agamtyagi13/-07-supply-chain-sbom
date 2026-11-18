@@ -1,0 +1,21 @@
+{
+ "Results": [
+  {
+   "Target": "img",
+   "Vulnerabilities": [
+    {
+     "VulnerabilityID": "CVE-2099-U0",
+     "PkgName": "libz",
+     "InstalledVersion": "1.0",
+     "Severity": "CRITICAL"
+    },
+    {
+     "VulnerabilityID": "CVE-2099-U1",
+     "PkgName": "libz",
+     "InstalledVersion": "1.0",
+     "Severity": "CRITICAL"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,44 @@
+{
+ "Results": [
+  {
+   "Target": "img",
+   "Vulnerabilities": [
+    {
+     "VulnerabilityID": "CVE-2099-H0",
+     "PkgName": "liby",
+     "InstalledVersion": "1.0",
+     "FixedVersion": "1.1",
+     "Severity": "HIGH"
+    },
+    {
+     "VulnerabilityID": "CVE-2099-H1",
+     "PkgName": "liby",
+     "InstalledVersion": "1.0",
+     "FixedVersion": "1.1",
+     "Severity": "HIGH"
+    },
+    {
+     "VulnerabilityID": "CVE-2099-H2",
+     "PkgName": "liby",
+     "InstalledVersion": "1.0",
+     "FixedVersion": "1.1",
+     "Severity": "HIGH"
+    },
+    {
+     "VulnerabilityID": "CVE-2099-H3",
+     "PkgName": "liby",
+     "InstalledVersion": "1.0",
+     "FixedVersion": "1.1",
+     "Severity": "HIGH"
+    },
+    {
+     "VulnerabilityID": "CVE-2099-H4",
+     "PkgName": "liby",
+     "InstalledVersion": "1.0",
+     "FixedVersion": "1.1",
+     "Severity": "HIGH"
+    }
+   ]
+  }
+ ]
+}

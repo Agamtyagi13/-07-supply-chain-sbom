@@ -1,0 +1,16 @@
+{
+ "Results": [
+  {
+   "Target": "img",
+   "Vulnerabilities": [
+    {
+     "VulnerabilityID": "CVE-2099-0001-0",
+     "PkgName": "libx",
+     "InstalledVersion": "1.0",
+     "FixedVersion": "1.1",
+     "Severity": "CRITICAL"
+    }
+   ]
+  }
+ ]
+}

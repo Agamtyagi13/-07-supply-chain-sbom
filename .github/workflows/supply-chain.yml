@@ -1,0 +1,154 @@
+name: supply-chain
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/${{ github.repository }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write        # keyless cosign + SLSA
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+      image: ${{ env.IMAGE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (BuildKit) and push by commit tag
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          build-args: |
+            VCS_REF=${{ github.sha }}
+          provenance: false      # SLSA provenance comes from the isolated generator job
+          sbom: false            # SBOM comes from Syft below
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate SBOM (Syft, CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE }}:${{ github.sha }}
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+
+      - name: Scan image (Trivy, JSON)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          format: json
+          output: trivy.json
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "0"          # the policy gate decides, not Trivy
+
+      - name: Scan dependency manifests (Trivy fs)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: json
+          output: trivy-fs.json
+          exit-code: "0"
+
+      - name: Policy gate
+        run: |
+          python scripts/policy_gate.py \
+            --trivy trivy.json --sbom sbom.cdx.json \
+            --policy policy/policy.json --report policy-report.md
+          cat policy-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-evidence
+          path: |
+            sbom.cdx.json
+            trivy.json
+            trivy-fs.json
+            policy-report.md
+
+      # Only reached if the gate passed. Failure above blocks signing and release.
+      - uses: sigstore/cosign-installer@v3
+        if: github.event_name != 'pull_request'
+
+      - name: Sign image (keyless)
+        if: github.event_name != 'pull_request'
+        run: cosign sign --yes "${IMAGE}@${{ steps.push.outputs.digest }}"
+
+      - name: Attest SBOM
+        if: github.event_name != 'pull_request'
+        run: |
+          cosign attest --yes --type cyclonedx --predicate sbom.cdx.json \
+            "${IMAGE}@${{ steps.push.outputs.digest }}"
+
+  provenance:
+    if: github.event_name != 'pull_request'
+    needs: build
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    with:
+      image: ${{ needs.build.outputs.image }}
+      digest: ${{ needs.build.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  release:
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    needs: [build, provenance]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: sigstore/cosign-installer@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Verify signature before promoting
+        run: |
+          cosign verify "${IMAGE}@${{ needs.build.outputs.digest }}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/"
+
+      - name: Promote (retag same digest)
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:latest" \
+            "${IMAGE}@${{ needs.build.outputs.digest }}"

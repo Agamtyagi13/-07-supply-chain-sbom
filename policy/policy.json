@@ -1,0 +1,14 @@
+{
+  "max_critical": 0,
+  "max_high": 3,
+  "ignore_unfixed": true,
+  "require_sbom_components_min": 10,
+  "denied_licenses": ["AGPL-3.0-only", "AGPL-3.0-or-later", "SSPL-1.0"],
+  "waivers": [
+    {
+      "id": "CVE-0000-00000",
+      "reason": "Example waiver - replace or remove",
+      "expires": "2026-12-31"
+    }
+  ]
+}
